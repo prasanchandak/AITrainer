@@ -1,4 +1,6 @@
 # Importing the libraries
+from base64 import encode
+from turtle import right
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -12,23 +14,27 @@ from datetime import datetime
 path = 'ImagesAttendance'
 images = []
 classNames = []
-myList = os.listdir(path)
+myList = os.listdir(path) # My list is a list of names of files in the directory path.
 print(myList)
-url = 'https://posturetracking-default-rtdb.firebaseio.com/'
-#firebase = firebase.FirebaseApplication(url)
+url = 'https://ai-trainer-d413b-default-rtdb.firebaseio.com/'
+firebase = firebase.FirebaseApplication(url)
 for cl in myList:
-    curImg = cv2.imread(f'{path}/{cl}')
-    images.append(curImg)
-    classNames.append(os.path.splitext(cl)[0])
-print(classNames)
+    curImg = cv2.imread(f'{path}/{cl}') # This is the image read from the path
+    images.append(curImg) # This function creates an array for the image array
+    classNames.append(os.path.splitext(cl)[0]) # Adds the name of the image to the classNames array
+print(classNames) # Prints the classNames array
+# The above code reads and displays the names of the images in ImagesAttendance folder.
 
-def findEncodings(images):
+def findEncodings(images): # Images array is given in the function argument
     encodeList = []
     for img in images:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        encode = face_recognition.face_encodings(img)[0]
-        encodeList.append(encode)
-    return encodeList
+        encode = face_recognition.face_encodings(img)[0] # Generating encodings
+        # Given an image, return the 128-dimension face encoding for each face in the image.
+        encodeList.append(encode) # Appending to the encodeList array
+    return encodeList 
+
+# This function finds the encodings in the images. These encodings can be then saved to a file using a numpy array
 
 def markAttendance(name):
     with open('Attendance2.csv', 'r+') as f:
@@ -43,7 +49,13 @@ def markAttendance(name):
             dtString = now.strftime('%H:%M:%S')
             f.writelines(f'\n{name},{dtString}')
 
-encodeListKnown =  findEncodings(images)
+# This function marks attendance in the Attendance2.csv file
+
+
+
+encodeListKnown =  findEncodings(images) # Gives the encodings of the input array of images
+# This encodeListKnown can be then loaded from a numpy file.
+print(encodeListKnown)
 print('Encoding Complete')
 
 
@@ -94,20 +106,52 @@ def infer():
     while cap.isOpened():
         _, frame = cap.read()
 
-        imgS = cv2.resize(frame, (0, 0), None, 0.25, 0.25)
+        imgS = cv2.resize(frame, (0, 0), None, 0.25, 0.25) 
+        #cv2.resize(src, dsize[, dst[, fx[, fy[, interpolation]]]])
         imgS = cv2.cvtColor(imgS, cv2.COLOR_BGR2RGB)
 
         facesCurFrame = face_recognition.face_locations(imgS)
+        # face_locations() which gives an array listing the co-ordinates of each face.
         encodesCurFrame = face_recognition.face_encodings(imgS, facesCurFrame)
+        # Generates an encoding on the current image given the coordinates
 
-        for encodeFace, faceLoc in zip(encodesCurFrame, facesCurFrame):
+
+        for encodeFace, faceLoc in zip(encodesCurFrame, facesCurFrame): # Loops the current face one by one and their location
             matches = face_recognition.compare_faces(encodeListKnown, encodeFace)
+            # Compares the current encodings to the listed encodings
+            '''
+
+            https://face-recognition.readthedocs.io/en/latest/face_recognition.html
+
+            face_recognition.api.compare_faces(known_face_encodings, face_encoding_to_check, tolerance=0.6)[source]
+            Compare a list of face encodings against a candidate encoding to see if they match.
+
+            Parameters:	
+            known_face_encodings – A list of known face encodings
+            face_encoding_to_check – A single face encoding to compare against the list
+            tolerance – How much distance between faces to consider it a match. Lower is more strict. 0.6 is typical best performance.
+            Returns:	
+            A list of True/False values indicating which known_face_encodings match the face encoding to check
+            '''
+
             faceDis = face_recognition.face_distance(encodeListKnown, encodeFace)
+            # Gives the face distance of the encoded face.
+            # Given a list of face encodings, compare them to a known face encoding and get a euclidean distance for each comparison face. 
+            # The distance tells you how similar the faces are.
+            # Returns:	A numpy ndarray with the distance for each face in the same order as the ‘faces’ array.
+            # The lesser the face distance, the better the match
+
             print(faceDis)
             matchIndex = np.argmin(faceDis)
+            # Returns the indices of the minimum values along an axis.
+            # Array of indices into the array. It has the same shape as a.shape with the dimension along axis removed. 
+            # If keepdims is set to True, then the size of axis will be 1 with the resulting array having same shape as a.shape.
+
+            print("matches:\n", matches, "\n matchIndex: \n", matchIndex)
 
             if matches[matchIndex]:
-                name = classNames[matchIndex].upper()
+                # matches is an array which has a list of true/false valuesindicating which known_face_encodings match the given face.
+                name = classNames[matchIndex].upper() # If the 
                 tracker_name = name
                 print(name)
                 y1, x2, y2, x1 = faceLoc
@@ -186,12 +230,13 @@ def infer():
         mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
         cv2.imshow('MediaPipe feed', image)
-
-        #result = firebase.put("/Name", tracker_name, "biceps")
-        #result1 = firebase.put("/LeftRepsCount", left_count, "left")
-        #result2 = firebase.put("/RightRepsCount", right_count, "right")
+        
         k = cv2.waitKey(30) & 0xff  # Esc for quiting the app
+
         if k == 27:
+            result = firebase.put("/Name", tracker_name, "biceps")
+            result1 = firebase.put("/LeftRepsCount", str(left_count), "left")
+            result2 = firebase.put("/RightRepsCount", str(right_count), "right")
             break
         elif k == ord('r'):  # Reset the counter on pressing 'r' on the Keyboard
             left_count = 0
